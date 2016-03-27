@@ -4,11 +4,15 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.graphics.PointF;
 import android.util.Log;
+import android.util.Pair;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.OvershootInterpolator;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by dionysis_lorentzos on 5/8/14
@@ -38,10 +42,12 @@ public class FlingCardListener implements View.OnTouchListener {
     private float aDownTouchX;
     private float aDownTouchY;
 
+    private List<Pair<Float, Float>> newScale = new ArrayList<>();
+    private int topMargin;
+
     // The active pointer is the one currently moving our object.
     private int mActivePointerId = INVALID_POINTER_ID;
-    private View frame = null;
-
+    private List<View> frames = null;
 
     private final int TOUCH_ABOVE = 0;
     private final int TOUCH_BELOW = 1;
@@ -50,26 +56,25 @@ public class FlingCardListener implements View.OnTouchListener {
     private boolean isAnimationRunning = false;
     private float MAX_COS = (float) Math.cos(Math.toRadians(45));
 
-
-    public FlingCardListener(View frame, Object itemAtPosition, FlingListener flingListener) {
-        this(frame, itemAtPosition, 15f, flingListener);
+    public FlingCardListener(List<View> frames, List<Pair<Float, Float>> newScale, int topMargin, Object itemAtPosition, FlingListener flingListener) {
+        this(frames, newScale, topMargin, itemAtPosition, 15f, flingListener);
     }
 
-    public FlingCardListener(View frame, Object itemAtPosition, float rotation_degrees, FlingListener flingListener) {
+    public FlingCardListener(List<View> frames, List<Pair<Float, Float>> newScale, int topMargin, Object itemAtPosition, float rotation_degrees, FlingListener flingListener) {
         super();
-        this.frame = frame;
-        this.objectX = frame.getX();
-        this.objectY = frame.getY();
-        this.objectH = frame.getHeight();
-        this.objectW = frame.getWidth();
+        this.frames = new ArrayList<>(frames);
+        this.newScale = new ArrayList<>(newScale);
+        this.topMargin = topMargin;
+        this.objectX = frames.get(0).getX();
+        this.objectY = frames.get(0).getY();
+        this.objectH = frames.get(0).getHeight();
+        this.objectW = frames.get(0).getWidth();
         this.halfWidth = objectW / 2f;
         this.dataObject = itemAtPosition;
-        this.parentWidth = ((ViewGroup) frame.getParent()).getWidth();
+        this.parentWidth = ((ViewGroup) frames.get(0).getParent()).getWidth();
         this.BASE_ROTATION_DEGREES = rotation_degrees;
         this.mFlingListener = flingListener;
-
     }
-
 
     public boolean onTouch(View view, MotionEvent event) {
 
@@ -97,10 +102,10 @@ public class FlingCardListener implements View.OnTouchListener {
                     //to prevent an initial jump of the magnifier, aposX and aPosY must
                     //have the values from the magnifier frame
                     if (aPosX == 0) {
-                        aPosX = frame.getX();
+                        aPosX = frames.get(0).getX();
                     }
                     if (aPosY == 0) {
-                        aPosY = frame.getY();
+                        aPosY = frames.get(0).getY();
                     }
 
                     if (y < objectH / 2) {
@@ -159,10 +164,55 @@ public class FlingCardListener implements View.OnTouchListener {
                 }
 
                 //in this area would be code for doing something with the view as the frame moves.
-                frame.setX(aPosX);
-                frame.setY(aPosY);
-                frame.setRotation(rotation);
-                mFlingListener.onScroll(getScrollProgressPercent());
+                frames.get(0).setX(aPosX);
+                frames.get(0).setY(aPosY);
+                frames.get(0).setRotation(rotation);
+
+                float scrollProgressPercent = getScrollProgressPercent();
+                float absScrollProgressPercent = Math.abs(scrollProgressPercent);
+
+                if (frames.get(1) != null) {
+                    float scalingValueX = 1.0f - newScale.get(0).first;
+                    float scalingValueY = 1.0f - newScale.get(0).second;
+
+                    float currentScaleValueX = absScrollProgressPercent * scalingValueX;
+                    float currentScaleValueY = absScrollProgressPercent * scalingValueY;
+
+                    frames.get(1).setScaleX(newScale.get(0).first + currentScaleValueX);
+                    frames.get(1).setScaleY(newScale.get(0).second + currentScaleValueY);
+
+                    frames.get(1).setTranslationY(topMargin * absScrollProgressPercent);
+                }
+
+                if (frames.get(2) != null) {
+                    float scalingValueX = newScale.get(0).first - newScale.get(1).first;
+                    float scalingValueY = newScale.get(0).second - newScale.get(1).second;
+
+                    float currentScaleValueX = absScrollProgressPercent * scalingValueX;
+                    float currentScaleValueY = absScrollProgressPercent * scalingValueY;
+
+                    frames.get(2).setScaleX(newScale.get(1).first + currentScaleValueX);
+                    frames.get(2).setScaleY(newScale.get(1).second + currentScaleValueY);
+
+                    frames.get(2).setTranslationY(topMargin * absScrollProgressPercent);
+                }
+
+                if (frames.get(3) != null) {
+                    float scalingValueX = newScale.get(1).first - newScale.get(2).first;
+                    float scalingValueY = newScale.get(1).second - newScale.get(2).second;
+
+                    float currentScaleValueX = absScrollProgressPercent * scalingValueX;
+                    float currentScaleValueY = absScrollProgressPercent * scalingValueY;
+
+                    frames.get(3).setScaleX(newScale.get(2).first + currentScaleValueX);
+                    frames.get(3).setScaleY(newScale.get(2).second + currentScaleValueY);
+
+                    frames.get(3).setTranslationY(topMargin * absScrollProgressPercent);
+
+                    frames.get(3).setAlpha(absScrollProgressPercent);
+                }
+
+                mFlingListener.onScroll(scrollProgressPercent);
                 break;
 
             case MotionEvent.ACTION_CANCEL: {
@@ -201,12 +251,25 @@ public class FlingCardListener implements View.OnTouchListener {
             aPosY = 0;
             aDownTouchX = 0;
             aDownTouchY = 0;
-            frame.animate()
+            frames.get(0).animate()
                     .setDuration(200)
                     .setInterpolator(new OvershootInterpolator(1.5f))
                     .x(objectX)
                     .y(objectY)
                     .rotation(0);
+
+            if (frames.get(1) != null) {
+                frames.get(1).animate().scaleX(newScale.get(0).first).scaleY(newScale.get(0).second).translationY(0).setDuration(200).setInterpolator(new OvershootInterpolator(1.5f));
+            }
+
+            if (frames.get(2) != null) {
+                frames.get(2).animate().scaleX(newScale.get(1).first).scaleY(newScale.get(1).second).translationY(0).setDuration(200).setInterpolator(new OvershootInterpolator(1.5f));
+            }
+
+            if (frames.get(3) != null) {
+                frames.get(3).animate().scaleX(newScale.get(2).first).scaleY(newScale.get(2).second).alpha(0f).translationY(0).setDuration(200).setInterpolator(new OvershootInterpolator(1.5f));
+            }
+
             mFlingListener.onScroll(0.0f);
             if (abslMoveDistance < 4.0) {
                 mFlingListener.onClick(dataObject);
@@ -244,7 +307,7 @@ public class FlingCardListener implements View.OnTouchListener {
             exitX = parentWidth + getRotationWidthOffset();
         }
 
-        this.frame.animate()
+        this.frames.get(0).animate()
                 .setDuration(duration)
                 .setInterpolator(new AccelerateInterpolator())
                 .x(exitX)
@@ -263,6 +326,18 @@ public class FlingCardListener implements View.OnTouchListener {
                     }
                 })
                 .rotation(getExitRotation(isLeft));
+
+        if (frames.get(1) != null) {
+            frames.get(1).animate().scaleX(1.0f).scaleY(1.0f).translationY(topMargin).setDuration(duration).setInterpolator(new AccelerateInterpolator());
+        }
+
+        if (frames.get(2) != null) {
+            frames.get(2).animate().scaleX(newScale.get(0).first).scaleY(newScale.get(0).second).translationY(topMargin).setDuration(duration).setInterpolator(new AccelerateInterpolator());
+        }
+
+        if (frames.get(3) != null) {
+            frames.get(3).animate().scaleX(newScale.get(1).first).scaleY(newScale.get(1).second).translationY(topMargin).alpha(1f).setDuration(duration).setInterpolator(new AccelerateInterpolator());
+        }
     }
 
 
